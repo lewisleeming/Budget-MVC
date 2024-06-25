@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Expense</title>
+    <link rel="stylesheet" type="text/css" href="/css/styles.css">
+</head>
+<body>
+    <h1>Add Expense</h1>
+    <form action="/expenses/add" method="POST" onsubmit="return validateForm()">
+        <input type="number" name="amount" placeholder="Amount" required>
+        <input type="text" name="description" placeholder="Description" required>
+        <label for="category">Category</label>
+        <select id="dropbox" name="" onchange="checkvalue(this.value)" required>
+            <option value="Groceries">Groceries</option>
+            <option value="Petrol/Diesel">Petrol/Diesel</option>
+            <option value="Gym">Gym</option>
+            <option value="Rent">Rent</option>
+            <option value="Gifts">Gifts</option>
+            <option value="Travel">Travel</option>
+            <option value="Savings">Savings</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Bills(water,electricity,internet)">Bills (water, electricity, internet)</option>
+            <option value="Phone">Phone</option>
+            <option value="others">Other</option>
+        </select>
+        <input type="text" id="other" placeholder="Specify other category" style="display:none" />
+        <button type="submit">Add Expense</button>
+    </form>
+</body>
+<script src="/js/app.js"></script> 
+</html>

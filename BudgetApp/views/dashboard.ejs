@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="/css/styles.css">
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="/js/app.js" defer></script>
+    <script src="/js/visualisation.js" defer></script>
+</head>
+<body>
+    <h1>Welcome, <%= user.email %></h1>
+    <p><a href="/auth/logout">Logout</a></p>
+
+    <h2>Set Your Total Budget and Date Budget:<%= user.totalBudget %> Date:<%= user.budgetDate %></h2>
+    <form action="/set-budget" method="POST">
+        <label for="totalBudget">Total Budget:</label>
+        <input type="number" id="totalBudget" name="totalBudget" value="<%= user.totalBudget %>" required>
+        <label for="budgetDate">Budget Date:</label>
+        <input type="date" id="budgetDate" name="budgetDate" value="<%= user.budgetDate %>" required>
+        <button type="submit">Set Budget</button>
+    </form>
+    
+    <h2>Track Your Budget</h2>
+    <p><a href="/incomes/add">Add Income</a></p>
+    <p><a href="/expenses/add">Add Expense</a></p>
+    
+    <h2>Your Transactions - total income <%= totalIncome %> - total expenses <%= totalExpense %> - total <%= total %></h2>
+
+    <ul>
+        <% incomes.forEach(income => { %>
+            <li>
+                <%= income.amount %> - <%= income.description %> (on <%= income.date.toDateString() %>)
+                <button onclick="deleteIncome('<%= income._id %>')">Delete</button>
+            </li>
+        <% }) %>
+    </ul>
+
+    <h3>Expenses</h3>
+    <ul>
+        <% expenses.forEach(expense => { %>
+            <li>
+                <%= expense.amount %> - <%= expense.category %> - <%= expense.description %> (on <%= expense.date.toDateString() %>)
+                <button onclick="deleteExpense('<%= expense._id %>')">Delete</button>
+            </li>
+        <% }) %>
+    </ul>
+    <!-- <button onclick="update(data1)">Data 1</button>
+    <button onclick="update(data2)">Data 2</button> -->
+    <div id="pie-chart"></div>
+    <script type="application/json" id="expenses-data"><%= JSON.stringify(expenses) %></script>
+    <script type="application/json" id="total-budget"><%= totalBudget %></script>
+    <div id="bar-chart"></div>
+    <div class="tooltip" style="opacity: 0;"></div>
+</body>
+</html>
