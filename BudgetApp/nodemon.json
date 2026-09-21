@@ -1,6 +1,5 @@
 {
-    "env":
-    {
+    "env": {
         "MONGO_ATLAS_PW": "NzaJhTZ1wqiC24yJ"
     }
 }
