@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Expense - BudgetApp</title>
+    <title>Edit Expense - BudgetApp</title>
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
@@ -19,8 +19,8 @@
     <main class="page-container">
         <div class="form-card">
             <div class="card-header">
-                <h2>Record New Expense</h2>
-                <p class="text-muted">Track your spending to keep within your monthly budget</p>
+                <h2>Edit Expense</h2>
+                <p class="text-muted">Modify transaction details</p>
             </div>
 
             <% if (messages.error && messages.error.length > 0) { %>
@@ -31,7 +31,7 @@
                 </div>
             <% } %>
 
-            <form action="/expenses/add" method="POST" class="standard-form">
+            <form action="/expenses/<%= expense._id %>/edit" method="POST" class="standard-form">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
                 <div class="form-group">
@@ -40,7 +40,7 @@
                         type="number" 
                         id="amount" 
                         name="amount" 
-                        placeholder="0.00" 
+                        value="<%= expense.amount %>" 
                         step="0.01" 
                         min="0.01" 
                         max="10000000"
@@ -55,7 +55,7 @@
                         type="text" 
                         id="description" 
                         name="description" 
-                        placeholder="e.g. Weekly supermarket shop" 
+                        value="<%= expense.description %>" 
                         maxlength="200" 
                         required
                     >
@@ -65,7 +65,7 @@
                     <label for="category">Category <span class="required">*</span></label>
                     <select id="category" name="category" required onchange="handleCategoryChange(this)">
                         <% categories.forEach(function(cat) { %>
-                            <option value="<%= cat %>"><%= cat %></option>
+                            <option value="<%= cat %>" <%= expense.category === cat ? 'selected' : '' %>><%= cat %></option>
                         <% }) %>
                     </select>
                 </div>
@@ -77,27 +77,27 @@
 
                 <div class="form-group">
                     <label for="date">Transaction Date <span class="required">*</span></label>
-                    <input type="date" id="date" name="date" value="<%= today %>" required>
+                    <input type="date" id="date" name="date" value="<%= formattedDate %>" required>
                 </div>
 
                 <div class="form-group checkbox-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="isRecurring" name="isRecurring" value="true" onchange="toggleRecurringOptions(this)">
-                        <span>This is a recurring expense (e.g. rent, bills, subscriptions)</span>
+                        <input type="checkbox" id="isRecurring" name="isRecurring" value="true" <%= expense.isRecurring ? 'checked' : '' %> onchange="toggleRecurringOptions(this)">
+                        <span>This is a recurring expense</span>
                     </label>
                 </div>
 
-                <div class="form-group" id="frequency-group" style="display: none;">
+                <div class="form-group" id="frequency-group" style="<%= expense.isRecurring ? '' : 'display: none;' %>">
                     <label for="frequency">Billing Frequency</label>
                     <select id="frequency" name="frequency">
-                        <option value="monthly" selected>Monthly</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="yearly">Yearly</option>
+                        <option value="monthly" <%= expense.frequency === 'monthly' ? 'selected' : '' %>>Monthly</option>
+                        <option value="weekly" <%= expense.frequency === 'weekly' ? 'selected' : '' %>>Weekly</option>
+                        <option value="yearly" <%= expense.frequency === 'yearly' ? 'selected' : '' %>>Yearly</option>
                     </select>
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-danger">Record Expense</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
                     <a href="/dashboard" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>

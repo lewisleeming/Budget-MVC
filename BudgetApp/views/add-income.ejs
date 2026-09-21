@@ -1,15 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Add Income</title>
-    <link rel="stylesheet" type="text/css" href="/css/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Income - BudgetApp</title>
+    <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-    <h1>Add Income</h1>
-    <form action="/incomes/add" method="POST">
-        <input type="number" name="amount" placeholder="Amount" required>
-        <input type="text" name="description" placeholder="Description" required>
-        <button type="submit">Add Income</button>
-    </form>
+    <header class="app-header">
+        <div class="header-container">
+            <a href="/dashboard" class="brand-link">💰 BudgetApp</a>
+            <div class="header-actions">
+                <a href="/dashboard" class="btn btn-secondary btn-sm">← Back to Dashboard</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-container">
+        <div class="form-card">
+            <div class="card-header">
+                <h2>Record New Income</h2>
+                <p class="text-muted">Track salary, dividends, freelance gigs, and gifts</p>
+            </div>
+
+            <% if (messages.error && messages.error.length > 0) { %>
+                <div class="alert alert-error" role="alert">
+                    <% messages.error.forEach(function(error) { %>
+                        <p><%= error %></p>
+                    <% }) %>
+                </div>
+            <% } %>
+
+            <form action="/incomes/add" method="POST" class="standard-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+                <div class="form-group">
+                    <label for="amount">Amount (£) <span class="required">*</span></label>
+                    <input 
+                        type="number" 
+                        id="amount" 
+                        name="amount" 
+                        placeholder="0.00" 
+                        step="0.01" 
+                        min="0.01" 
+                        max="10000000"
+                        required 
+                        autofocus
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description <span class="required">*</span></label>
+                    <input 
+                        type="text" 
+                        id="description" 
+                        name="description" 
+                        placeholder="e.g. Monthly Salary, Freelance project" 
+                        maxlength="200" 
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="category">Category <span class="required">*</span></label>
+                    <select id="category" name="category" required>
+                        <% categories.forEach(function(cat) { %>
+                            <option value="<%= cat %>"><%= cat %></option>
+                        <% }) %>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="date">Transaction Date <span class="required">*</span></label>
+                    <input type="date" id="date" name="date" value="<%= today %>" required>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isRecurring" name="isRecurring" value="true" onchange="toggleRecurringOptions(this)">
+                        <span>This is recurring income (e.g. monthly salary, regular pension)</span>
+                    </label>
+                </div>
+
+                <div class="form-group" id="frequency-group" style="display: none;">
+                    <label for="frequency">Frequency</label>
+                    <select id="frequency" name="frequency">
+                        <option value="monthly" selected>Monthly</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Record Income</button>
+                    <a href="/dashboard" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script src="/js/app.js"></script>
 </body>
 </html>

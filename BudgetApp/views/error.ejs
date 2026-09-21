@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error <%= locals.statusCode || 500 %> - BudgetApp</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="error-page">
+    <div class="error-container">
+        <div class="error-card">
+            <span class="error-badge"><%= locals.statusCode || 500 %></span>
+            <h1><%= locals.title || 'Something Went Wrong' %></h1>
+            <p class="error-message"><%= locals.message || 'An error occurred' %></p>
+            <% if (typeof stack !== 'undefined' && stack && process.env.NODE_ENV !== 'production') { %>
+                <details class="error-details">
+                    <summary>Debug Details (Development Only)</summary>
+                    <pre><%= stack %></pre>
+                </details>
+            <% } %>
+            <div class="error-actions">
+                <a href="/dashboard" class="btn btn-primary">Return to Dashboard</a>
+                <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

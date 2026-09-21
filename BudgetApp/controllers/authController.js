@@ -1,44 +1,58 @@
-const User = require('../models/user');
-const bcrypt = require('bcrypt');
+'use strict';
 
-exports.signup = (req, res) => {
-    const { email, password } = req.body;
-    bcrypt.hash(password, 10, (err, hash) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        } else {
-            const newUser = new User({ email, password: hash });
-            newUser.save()
-                .then(() => res.redirect('/auth/login'))
-                .catch(err => res.status(500).json({ error: err }));
-        }
-    });
-};
+const authService = require('../services/authService');
 
-exports.login = (req, res) => {
+exports.signup = async (req, res, next) => {
     const { email, password } = req.body;
-    User.findOne({ email })
-        .then(user => {
-            if (!user) {
-                req.flash('error', 'Invalid email or password');
-                return res.redirect('/auth/login');
+    try {
+        await authService.registerUser(email, password);
+        req.flash('success', 'Registration successful! You can now log in.');
+        res.redirect('/auth/login');
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        if (statusCode === 400 || statusCode === 409) {
+            if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
+                return res.status(statusCode).json({ error: err.message });
             }
-            bcrypt.compare(password, user.password, (err, result) => {
-                if (err || !result) {
-                    req.flash('error', 'Invalid email or password');
-                    return res.redirect('/auth/login');
-                }
-                req.session.user = user;
-                res.redirect('/dashboard');
+            req.flash('error', err.message);
+            return res.status(statusCode).render('signup', {
+                messages: { error: [err.message] }
             });
-        })
-        .catch(err => res.status(500).json({ error: err }));
+        }
+        next(err);
+    }
 };
 
-exports.logout = (req, res) => {
-    req.session.destroy(err => {
+exports.login = async (req, res, next) => {
+    const { email, password } = req.body;
+    try {
+        const user = await authService.authenticateUser(email, password);
+        req.session.user = {
+            _id: user._id,
+            email: user.email,
+            currency: user.currency || 'GBP'
+        };
+        req.flash('success', 'Logged in successfully.');
+        res.redirect('/dashboard');
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        if (statusCode === 400 || statusCode === 401) {
+            if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
+                return res.status(statusCode).json({ error: err.message });
+            }
+            req.flash('error', err.message);
+            return res.status(statusCode).render('login', {
+                messages: { error: [err.message] }
+            });
+        }
+        next(err);
+    }
+};
+
+exports.logout = (req, res, next) => {
+    req.session.destroy((err) => {
         if (err) {
-            return res.status(500).json({ error: err });
+            return next(err);
         }
         res.redirect('/auth/login');
     });

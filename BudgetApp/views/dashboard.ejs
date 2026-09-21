@@ -1,55 +1,473 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Dashboard</title>
-    <link rel="stylesheet" type="text/css" href="/css/styles.css">
-    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - BudgetApp</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="/js/app.js" defer></script>
     <script src="/js/visualisation.js" defer></script>
 </head>
-<body>
-    <h1>Welcome, <%= user.email %></h1>
-    <p><a href="/auth/logout">Logout</a></p>
+<body class="dashboard-body">
+    <!-- Meta tags for client scripts -->
+    <meta name="csrf-token" content="<%= csrfToken %>">
 
-    <h2>Set Your Total Budget and Date Budget:<%= user.totalBudget %> Date:<%= user.budgetDate %></h2>
-    <form action="/set-budget" method="POST">
-        <label for="totalBudget">Total Budget:</label>
-        <input type="number" id="totalBudget" name="totalBudget" value="<%= user.totalBudget %>" required>
-        <label for="budgetDate">Budget Date:</label>
-        <input type="date" id="budgetDate" name="budgetDate" value="<%= user.budgetDate %>" required>
-        <button type="submit">Set Budget</button>
-    </form>
-    
-    <h2>Track Your Budget</h2>
-    <p><a href="/incomes/add">Add Income</a></p>
-    <p><a href="/expenses/add">Add Expense</a></p>
-    
-    <h2>Your Transactions - total income <%= totalIncome %> - total expenses <%= totalExpense %> - total <%= total %></h2>
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-group">
+                <a href="/dashboard" class="brand-link">💰 BudgetApp</a>
+                <span class="brand-tagline">Personal Finance</span>
+            </div>
 
-    <ul>
-        <% incomes.forEach(income => { %>
-            <li>
-                <%= income.amount %> - <%= income.description %> (on <%= income.date.toDateString() %>)
-                <button onclick="deleteIncome('<%= income._id %>')">Delete</button>
-            </li>
-        <% }) %>
-    </ul>
+            <!-- Month Filter -->
+            <form action="/dashboard" method="GET" class="month-selector-form">
+                <label for="month-picker" class="visually-hidden">Select Month</label>
+                <input 
+                    type="month" 
+                    id="month-picker" 
+                    name="month" 
+                    value="<%= summary.month %>" 
+                    onchange="this.form.submit()"
+                    title="Change viewing month"
+                >
+                <button type="submit" class="btn btn-sm btn-secondary">Go</button>
+            </form>
 
-    <h3>Expenses</h3>
-    <ul>
-        <% expenses.forEach(expense => { %>
-            <li>
-                <%= expense.amount %> - <%= expense.category %> - <%= expense.description %> (on <%= expense.date.toDateString() %>)
-                <button onclick="deleteExpense('<%= expense._id %>')">Delete</button>
-            </li>
-        <% }) %>
-    </ul>
-    <!-- <button onclick="update(data1)">Data 1</button>
-    <button onclick="update(data2)">Data 2</button> -->
-    <div id="pie-chart"></div>
-    <script type="application/json" id="expenses-data"><%= JSON.stringify(expenses) %></script>
-    <script type="application/json" id="total-budget"><%= totalBudget %></script>
-    <div id="bar-chart"></div>
-    <div class="tooltip" style="opacity: 0;"></div>
+            <div class="user-menu">
+                <span class="user-greeting">Signed in as <strong><%= user.email %></strong></span>
+                <a href="/auth/logout" class="btn btn-outline btn-sm">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- Flash Alert Messages -->
+        <% if (messages.error && messages.error.length > 0) { %>
+            <div class="alert alert-error" role="alert">
+                <% messages.error.forEach(function(error) { %>
+                    <p><%= error %></p>
+                <% }) %>
+            </div>
+        <% } %>
+        <% if (messages.success && messages.success.length > 0) { %>
+            <div class="alert alert-success" role="alert">
+                <% messages.success.forEach(function(msg) { %>
+                    <p><%= msg %></p>
+                <% }) %>
+            </div>
+        <% } %>
+
+        <!-- Dashboard Action Bar -->
+        <div class="dashboard-toolbar">
+            <div class="toolbar-title">
+                <h1>Financial Dashboard</h1>
+                <p class="text-muted">Viewing overview for <strong><%= summary.month %></strong></p>
+            </div>
+            <div class="toolbar-actions">
+                <a href="/incomes/add" class="btn btn-success">+ Add Income</a>
+                <a href="/expenses/add" class="btn btn-danger">+ Add Expense</a>
+                <button type="button" class="btn btn-secondary" onclick="toggleBudgetModal(true)">⚙ Set Budget & Limits</button>
+            </div>
+        </div>
+
+        <!-- Headline Cards -->
+        <section class="headline-cards" aria-label="Financial Highlights">
+            <!-- Card 1: Net Balance -->
+            <div class="card stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-label">Net Balance (All-Time)</span>
+                    <span class="stat-icon">🏦</span>
+                </div>
+                <div class="stat-value <%= summary.totalBalance >= 0 ? 'text-success' : 'text-danger' %>">
+                    <%= formatCurrency(summary.totalBalance) %>
+                </div>
+                <div class="stat-footer">
+                    <span>Month Net: </span>
+                    <strong class="<%= summary.monthlyBalance >= 0 ? 'text-success' : 'text-danger' %>">
+                        <%= summary.monthlyBalance >= 0 ? '+' : '' %><%= formatCurrency(summary.monthlyBalance) %>
+                    </strong>
+                </div>
+            </div>
+
+            <!-- Card 2: Monthly Income -->
+            <div class="card stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-label">Monthly Income</span>
+                    <span class="stat-icon">📈</span>
+                </div>
+                <div class="stat-value text-success">
+                    <%= formatCurrency(summary.monthlyIncome) %>
+                </div>
+                <div class="stat-footer">
+                    <span><%= summary.incomesCount %> incoming transaction<%= summary.incomesCount === 1 ? '' : 's' %></span>
+                </div>
+            </div>
+
+            <!-- Card 3: Monthly Expenses -->
+            <div class="card stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-label">Monthly Expenses</span>
+                    <span class="stat-icon">📉</span>
+                </div>
+                <div class="stat-value text-danger">
+                    <%= formatCurrency(summary.monthlyExpense) %>
+                </div>
+                <div class="stat-footer">
+                    <span><%= summary.expensesCount %> expense transaction<%= summary.expensesCount === 1 ? '' : 's' %></span>
+                </div>
+            </div>
+
+            <!-- Card 4: Budget Remaining & Safe-to-Spend -->
+            <div class="card stat-card stat-card-highlight">
+                <div class="stat-card-header">
+                    <span class="stat-label">Budget Remaining</span>
+                    <span class="stat-icon">🎯</span>
+                </div>
+                <div class="stat-value <%= summary.remainingBudget >= 0 ? 'text-primary' : 'text-danger' %>">
+                    <%= formatCurrency(summary.remainingBudget) %>
+                </div>
+                <div class="progress-bar-container">
+                    <div 
+                        class="progress-bar-fill <%= summary.percentageUsed > 100 ? 'bg-danger' : (summary.percentageUsed > 80 ? 'bg-warning' : 'bg-primary') %>" 
+                        style="width: <%= Math.min(100, summary.percentageUsed) %>%;"
+                    ></div>
+                </div>
+                <div class="stat-footer stat-footer-split">
+                    <span><%= summary.percentageUsed %>% used of <%= formatCurrency(summary.totalBudget) %></span>
+                    <% if (summary.daysRemaining > 0) { %>
+                        <span class="badge badge-safe">
+                            Safe to spend: <strong><%= formatCurrency(summary.dailySafeToSpend) %>/day</strong> (<%= summary.daysRemaining %>d left)
+                        </span>
+                    <% } else { %>
+                        <span class="badge badge-neutral">Month completed</span>
+                    <% } %>
+                </div>
+            </div>
+        </section>
+
+        <!-- Category Budget Limits Section (if configured) -->
+        <% if (summary.categoryBreakdown && summary.categoryBreakdown.length > 0) { %>
+            <section class="card category-limits-card" aria-label="Category Spending Limits">
+                <div class="card-header-flex">
+                    <div>
+                        <h2>Category Spending & Limits</h2>
+                        <p class="text-muted">Track how your spending compares to your set limits for <%= summary.month %></p>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleBudgetModal(true)">Adjust Limits</button>
+                </div>
+                <div class="category-limits-grid">
+                    <% summary.categoryBreakdown.forEach(function(cat) { %>
+                        <div class="category-limit-item <%= cat.isOverBudget ? 'over-budget' : '' %>">
+                            <div class="category-item-header">
+                                <span class="category-name"><%= cat.category %></span>
+                                <span class="category-amounts">
+                                    <strong><%= formatCurrency(cat.spent) %></strong>
+                                    <% if (cat.limit > 0) { %>
+                                        / <%= formatCurrency(cat.limit) %>
+                                    <% } %>
+                                </span>
+                            </div>
+                            <% if (cat.limit > 0) { %>
+                                <div class="progress-bar-container">
+                                    <div 
+                                        class="progress-bar-fill <%= cat.isOverBudget ? 'bg-danger' : (cat.percentage > 80 ? 'bg-warning' : 'bg-success') %>" 
+                                        style="width: <%= Math.min(100, cat.percentage) %>%;"
+                                    ></div>
+                                </div>
+                                <div class="category-item-footer">
+                                    <% if (cat.isOverBudget) { %>
+                                        <span class="text-danger font-bold">⚠️ Over budget by <%= formatCurrency(Math.abs(cat.remaining)) %></span>
+                                    <% } else { %>
+                                        <span class="text-muted"><%= formatCurrency(cat.remaining) %> remaining (<%= cat.percentage %>%)</span>
+                                    <% } %>
+                                </div>
+                            <% } else { %>
+                                <div class="category-item-footer">
+                                    <span class="text-muted">No limit set</span>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% }) %>
+                </div>
+            </section>
+        <% } %>
+
+        <!-- Visualisation Charts Grid -->
+        <section class="charts-grid" aria-label="Visual Insights">
+            <div class="card chart-card">
+                <div class="chart-header">
+                    <h3>Spending by Category</h3>
+                    <p class="text-muted">Breakdown of expenses this month</p>
+                </div>
+                <div id="chart-pie" class="chart-container"></div>
+            </div>
+
+            <div class="card chart-card">
+                <div class="chart-header">
+                    <h3>Monthly Income vs Expenses</h3>
+                    <p class="text-muted">6-month cash flow trajectory</p>
+                </div>
+                <div id="chart-bar" class="chart-container"></div>
+            </div>
+
+            <div class="card chart-card full-width-chart">
+                <div class="chart-header">
+                    <h3>Daily Spending Trend (<%= summary.month %>)</h3>
+                    <p class="text-muted">Track spending pace across the month</p>
+                </div>
+                <div id="chart-trend" class="chart-container"></div>
+            </div>
+        </section>
+
+        <!-- Hidden JSON Data payloads for D3 scripts -->
+        <script type="application/json" id="summary-data"><%- JSON.stringify(summary) %></script>
+
+        <!-- Unified Transactions Table -->
+        <section class="card transactions-section" aria-label="Transactions List">
+            <div class="transactions-header">
+                <div>
+                    <h2>Transactions</h2>
+                    <p class="text-muted"><%= transactions.length %> transaction<%= transactions.length === 1 ? '' : 's' %> found for <%= summary.month %></p>
+                </div>
+                <div class="transactions-actions">
+                    <a 
+                        href="/transactions/export?month=<%= encodeURIComponent(summary.month) %>&type=<%= encodeURIComponent(filterParams.type) %>&category=<%= encodeURIComponent(filterParams.category) %>&search=<%= encodeURIComponent(filterParams.search) %>" 
+                        class="btn btn-secondary btn-sm"
+                        title="Download transactions as CSV file"
+                    >
+                        📥 Export to CSV
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filters Bar -->
+            <form action="/dashboard" method="GET" class="filter-bar">
+                <input type="hidden" name="month" value="<%= summary.month %>">
+
+                <div class="filter-group filter-search">
+                    <label for="search" class="visually-hidden">Search</label>
+                    <input 
+                        type="search" 
+                        id="search" 
+                        name="search" 
+                        placeholder="Search description or category..." 
+                        value="<%= filterParams.search %>"
+                    >
+                </div>
+
+                <div class="filter-group">
+                    <label for="type" class="visually-hidden">Type</label>
+                    <select id="type" name="type">
+                        <option value="all" <%= filterParams.type === 'all' ? 'selected' : '' %>>All Types</option>
+                        <option value="expense" <%= filterParams.type === 'expense' ? 'selected' : '' %>>Expenses Only</option>
+                        <option value="income" <%= filterParams.type === 'income' ? 'selected' : '' %>>Income Only</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="category" class="visually-hidden">Category</label>
+                    <select id="category" name="category">
+                        <option value="all" <%= filterParams.category === 'all' ? 'selected' : '' %>>All Categories</option>
+                        <% expenseCategories.forEach(function(cat) { %>
+                            <option value="<%= cat %>" <%= filterParams.category === cat ? 'selected' : '' %>><%= cat %></option>
+                        <% }) %>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="sortBy" class="visually-hidden">Sort By</label>
+                    <select id="sortBy" name="sortBy">
+                        <option value="date" <%= filterParams.sortBy === 'date' ? 'selected' : '' %>>Date</option>
+                        <option value="amount" <%= filterParams.sortBy === 'amount' ? 'selected' : '' %>>Amount</option>
+                        <option value="description" <%= filterParams.sortBy === 'description' ? 'selected' : '' %>>Description</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="sortOrder" class="visually-hidden">Order</label>
+                    <select id="sortOrder" name="sortOrder">
+                        <option value="desc" <%= filterParams.sortOrder === 'desc' ? 'selected' : '' %>>Newest / Highest</option>
+                        <option value="asc" <%= filterParams.sortOrder === 'asc' ? 'selected' : '' %>>Oldest / Lowest</option>
+                    </select>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-sm btn-primary">Apply Filters</button>
+                    <% if (filterParams.search || filterParams.type !== 'all' || filterParams.category !== 'all') { %>
+                        <a href="/dashboard?month=<%= summary.month %>" class="btn btn-sm btn-outline">Reset</a>
+                    <% } %>
+                </div>
+            </form>
+
+            <!-- Transactions Responsive Table -->
+            <% if (transactions.length > 0) { %>
+                <div class="table-responsive">
+                    <table class="transactions-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Description</th>
+                                <th scope="col">Recurring</th>
+                                <th scope="col" class="text-right">Amount</th>
+                                <th scope="col" class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% transactions.forEach(function(item) { %>
+                                <tr class="transaction-row transaction-<%= item.type %>">
+                                    <td class="cell-date"><%= formatDate(item.date) %></td>
+                                    <td class="cell-type">
+                                        <span class="badge badge-<%= item.type %>"><%= item.type %></span>
+                                    </td>
+                                    <td class="cell-category">
+                                        <span class="category-tag"><%= item.category %></span>
+                                    </td>
+                                    <td class="cell-description font-medium">
+                                        <%= item.description %>
+                                    </td>
+                                    <td class="cell-recurring">
+                                        <% if (item.isRecurring) { %>
+                                            <span class="badge badge-recurring" title="Repeats <%= item.frequency %>">
+                                                🔄 <%= item.frequency || 'recurring' %>
+                                            </span>
+                                        <% } else { %>
+                                            <span class="text-muted">—</span>
+                                        <% } %>
+                                    </td>
+                                    <td class="cell-amount text-right <%= item.type === 'income' ? 'text-success' : 'text-danger' %> font-bold">
+                                        <%= item.type === 'income' ? '+' : '-' %><%= formatCurrency(item.amount) %>
+                                    </td>
+                                    <td class="cell-actions text-center">
+                                        <div class="action-buttons">
+                                            <a 
+                                                href="/<%= item.type %>s/<%= item._id %>/edit" 
+                                                class="btn btn-icon" 
+                                                title="Edit <%= item.type %>"
+                                                aria-label="Edit <%= item.description %>"
+                                            >✏️</a>
+                                            <button 
+                                                type="button" 
+                                                class="btn btn-icon btn-icon-danger" 
+                                                onclick="openDeleteDialog('<%= item.type %>s', '<%= item._id %>', '<%= item.description.replace(/'/g, "\\'") %>', '<%= formatCurrency(item.amount) %>')"
+                                                title="Delete <%= item.type %>"
+                                                aria-label="Delete <%= item.description %>"
+                                            >🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } else { %>
+                <!-- Clean Empty State -->
+                <div class="empty-state">
+                    <div class="empty-icon">📂</div>
+                    <h3>No Transactions Found</h3>
+                    <p class="text-muted">
+                        <% if (filterParams.search || filterParams.type !== 'all' || filterParams.category !== 'all') { %>
+                            No transactions matched your active filters. Try resetting the search filters.
+                        <% } else { %>
+                            There are no recorded transactions for <strong><%= summary.month %></strong> yet. Start by recording your income or an expense above!
+                        <% } %>
+                    </p>
+                    <div class="empty-actions">
+                        <a href="/incomes/add" class="btn btn-success btn-sm">+ Add Income</a>
+                        <a href="/expenses/add" class="btn btn-danger btn-sm">+ Add Expense</a>
+                    </div>
+                </div>
+            <% } %>
+        </section>
+    </main>
+
+    <!-- Native Accessible Modal Dialog: Set Monthly Budget & Limits -->
+    <dialog id="budget-modal" class="modal-dialog">
+        <div class="modal-dialog-content">
+            <div class="modal-header">
+                <h2>Set Monthly Budget & Limits (<%= summary.month %>)</h2>
+                <button type="button" class="btn-close" onclick="toggleBudgetModal(false)" aria-label="Close modal">✕</button>
+            </div>
+            <form action="/set-budget" method="POST" class="standard-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="month" value="<%= summary.month %>">
+
+                <div class="form-group">
+                    <label for="totalBudget">Total Monthly Budget (£) <span class="required">*</span></label>
+                    <input 
+                        type="number" 
+                        id="totalBudget" 
+                        name="totalBudget" 
+                        value="<%= summary.totalBudget %>" 
+                        step="0.01" 
+                        min="0" 
+                        required
+                    >
+                    <small class="form-hint">Overall spending target for this month.</small>
+                </div>
+
+                <div class="category-limits-form-section">
+                    <h3>Category Spending Limits (Optional)</h3>
+                    <p class="text-muted">Set specific spending limits for each category (e.g. £300 Groceries, £150 Travel):</p>
+                    
+                    <div class="category-inputs-grid">
+                        <% expenseCategories.forEach(function(cat) { 
+                            const inputName = 'limit_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
+                            const currentLimit = summary.categoryBudgetsMap[cat] || '';
+                        %>
+                            <div class="category-input-row">
+                                <label for="<%= inputName %>"><%= cat %></label>
+                                <div class="input-prefix-wrapper">
+                                    <span class="prefix">£</span>
+                                    <input 
+                                        type="number" 
+                                        id="<%= inputName %>" 
+                                        name="<%= inputName %>" 
+                                        value="<%= currentLimit %>" 
+                                        placeholder="No limit" 
+                                        step="0.01" 
+                                        min="0"
+                                    >
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Save Budget Settings</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleBudgetModal(false)">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Native Accessible Modal Dialog: Confirmation Before Deletion -->
+    <dialog id="delete-dialog" class="modal-dialog delete-dialog">
+        <div class="modal-dialog-content">
+            <div class="modal-header">
+                <h2>Confirm Deletion</h2>
+                <button type="button" class="btn-close" onclick="closeDeleteDialog()" aria-label="Close modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this transaction?</p>
+                <div class="delete-item-summary">
+                    <strong id="delete-item-desc"></strong>
+                    <span id="delete-item-amount" class="text-muted"></span>
+                </div>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <form id="delete-form" method="POST" action="">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteDialog()">Cancel</button>
+            </div>
+        </div>
+    </dialog>
 </body>
 </html>

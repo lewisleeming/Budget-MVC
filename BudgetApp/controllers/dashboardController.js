@@ -1,47 +1,97 @@
-const Income = require('../models/income');
-const Expense = require('../models/expense');
-const User = require('../models/user');
-const budgetService = require('../services/budgetService');
+'use strict';
 
-exports.getDashboard = async (req, res) => {
+const budgetService = require('../services/budgetService');
+const transactionService = require('../services/transactionService');
+const { EXPENSE_CATEGORIES } = require('../constants/categories');
+const {
+    formatCurrency,
+    formatDate,
+    formatDateForInput,
+    getCurrentMonthString
+} = require('../utils/formatters');
+
+exports.getDashboard = async (req, res, next) => {
     try {
         const userId = req.session.user._id;
-        const incomes = await Income.find({ user: userId });
-        const expenses = await Expense.find({ user: userId });
-        const { totalIncome, totalExpense, total } = await budgetService.calculateTotals(userId);
-        const user = await User.findById(req.session.user._id);
+        const selectedMonth = req.query.month || getCurrentMonthString();
+
+        const filterParams = {
+            month: selectedMonth,
+            type: req.query.type || 'all',
+            category: req.query.category || 'all',
+            search: req.query.search || '',
+            sortBy: req.query.sortBy || 'date',
+            sortOrder: req.query.sortOrder || 'desc',
+            recurringOnly: req.query.recurring === 'true'
+        };
+
+        const [summary, transactions] = await Promise.all([
+            budgetService.getMonthlySummary(userId, selectedMonth),
+            transactionService.getTransactions(userId, filterParams)
+        ]);
 
         res.render('dashboard', {
             user: req.session.user,
-            incomes,
-            expenses,
-            totalIncome,
-            totalExpense,
-            total,
-            totalBudget: user.totalBudget || 0
+            summary,
+            transactions,
+            filterParams,
+            expenseCategories: EXPENSE_CATEGORIES,
+            formatCurrency,
+            formatDate,
+            formatDateForInput,
+            currentMonth: getCurrentMonthString()
         });
     } catch (err) {
-        res.status(500).json({ message: "Error fetching dashboard data" });
+        next(err);
     }
 };
 
-exports.setBudget = async (req, res) => {
-    const { totalBudget, budgetDate } = req.body;
-
+exports.setBudget = async (req, res, next) => {
     try {
-        const user = await User.findById(req.session.user._id);
+        const userId = req.session.user._id;
+        const month = req.body.month || getCurrentMonthString();
+        const totalBudget = Number(req.body.totalBudget) || 0;
 
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
+        // Parse category limits from form body
+        // Form sends limit_<categoryName>=<amount>
+        const categoryBudgets = [];
+        EXPENSE_CATEGORIES.forEach((cat) => {
+            const formKey = `limit_${cat.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            if (req.body[formKey] !== undefined && req.body[formKey] !== '') {
+                const limit = Number(req.body[formKey]);
+                if (!isNaN(limit) && limit >= 0) {
+                    categoryBudgets.push({ category: cat, limit });
+                }
+            }
+        });
 
-        user.totalBudget = totalBudget;
-        user.budgetDate = budgetDate;
-        const updatedUser = await user.save();
-
-        req.session.user = updatedUser; // Update session user with the latest data
-        res.redirect('/dashboard');
+        await budgetService.setMonthlyBudget(userId, month, totalBudget, categoryBudgets);
+        req.flash('success', `Budget for ${month} updated successfully.`);
+        res.redirect(`/dashboard?month=${encodeURIComponent(month)}`);
     } catch (err) {
-        res.status(500).json({ message: "Error setting budget" });
+        next(err);
+    }
+};
+
+exports.exportCSV = async (req, res, next) => {
+    try {
+        const userId = req.session.user._id;
+        const month = req.query.month || getCurrentMonthString();
+
+        const csvContent = await transactionService.exportTransactionsToCSV(userId, {
+            month,
+            type: req.query.type || 'all',
+            category: req.query.category || 'all',
+            search: req.query.search || '',
+            sortBy: req.query.sortBy || 'date',
+            sortOrder: req.query.sortOrder || 'desc'
+        });
+
+        const filename = `budget-transactions-${month}.csv`;
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.status(200).send(csvContent);
+    } catch (err) {
+        next(err);
     }
 };
